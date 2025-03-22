@@ -1,0 +1,218 @@
+AP	AP
+br	AP
+SP	SP
+pau	SP
+sil	SP
+EP	EP
+R	EP
+cl	cl
+a	a
+i	i
+u	u
+e	e
+o	o
+I	i
+U	u
+N	N
+n	N
+0a	GS a
+0i	GS i
+0u	GS u
+0e	GS e
+0o	GS o
+0N	GS N
+k	k
+ka	k a
+ki	k i
+ku	k u
+ke	k e
+ko	k o
+g	g
+ga	g a
+gi	g i
+gu	g u
+ge	g e
+go	g o
+nga	ng a
+ngi	ng i
+ngu	ng u
+nge	ng e
+ngo	ng o
+ky	ky
+kya	ky a
+kyi	ky i
+kyu	ky u
+kye	ky e
+kyo	ky o
+kwa	kw a
+kwi	kw i
+kwu	kw u
+kwe	kw e
+kwo	kw o
+gy	gy
+gya	gy a
+gyi	gy i
+gyu	gy u
+gye	gy e
+gyo	gy o
+gwa	gw a
+gwi	gw i
+gwu	gw u
+gwe	gw e
+gwo	gw o
+s	s
+sa	s a
+si	s i
+su	s u
+se	s e
+so	s o
+z 	z
+za	z a
+zi	z i
+zu	z u
+ze	z e
+zo	z o
+sh	sh
+sha	sh a
+shi	sh i
+shu	sh u
+she	sh e
+sho	sh o
+j	j
+ja	j a
+ji	j i
+ju	j u
+je	j e
+jo	j o
+t	t
+ta	t a
+ti	t i
+tu	t u
+te	t e
+to	t o
+ty	ty
+tya	ty a
+tyi	ty i
+tyu	ty u
+tye	ty e
+tyo	ty o
+ts	ts
+tsu	ts u
+d	d
+da	d a
+di	d i
+du	d u
+de	d e
+do	d o
+dy	dy
+dya	dy a
+dyi	dy i
+dyu	dy u
+dye	dy e
+dyo	dy o
+ch	ch
+cha	ch a
+chi	ch i
+chu	ch u
+che	ch e
+cho	ch o
+tsa	ts a
+tsi	ts i
+tsu	ts u
+tse	ts e
+tso	ts o
+na	n a
+ni	n i
+nu	n u
+ne	n e
+no	n o
+ny	ny
+nya	ny a
+nyi	ny i
+nyu	ny u
+nye	ny e
+nyo	ny o
+h	h
+ha	h a
+hi	h i
+hu	h u
+he	h e
+ho	h o
+b	b
+ba	b a
+bi	b i
+bu	b u
+be	b e
+bo	b o
+p	p
+pa	p a
+pi	p i
+pu	p u
+pe	p e
+po	p o
+hy	hy
+hya	hy a
+hyi	hy i
+hyu	hy u
+hye	hy e
+hyo	hy o
+by	by
+bya	by a
+byi	by i
+byu	by u
+bye	by e
+byo	by o
+py	py
+pya	py a
+pyi	py i
+pyu	py u
+pye	py e
+pyo	py o
+f	f
+fa	f a
+fi	f i
+fu	f u
+fe	f e
+fo	f o
+m	m
+ma	m a
+mi	m i
+mu	m u
+me	m e
+mo	m o
+my	my
+mya	my a
+myi	my i
+myu	my u
+mye	my e
+myo	my o
+y	y
+ya	y a
+yi	y i
+yu	y u
+ye	y e
+yo	y o
+r	r
+ra	r a
+ri	r i
+ru	r u
+re	r e
+ro	r o
+ry	ry
+rya	ry a
+ryi	ry i
+ryu	ry u
+rye	ry e
+ryo	ry o
+w	w
+wa	w a
+wi	w i
+wu	w u
+we	w e
+wo	w o
+v	v
+va	v a
+vi	v i
+vu	v u
+ve	v e
+vo	v o

@@ -124,6 +124,22 @@ IF NOT EXIST "ghin_shenanigans" (
 IF NOT EXIST "SOME" (
     git clone https://github.com/openvpi/SOME.git
 )
+@REM SOFA: Singing-Oriented Forced Aligner
+IF NOT EXIST "SOFA" (
+    git clone https://github.com/qiuqiao/SOFA.git
+)
+@REM pydomino
+IF NOT EXIST "pydomino" (
+    call "C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"
+    IF %ERRORLEVEL% neq 0 CALL ERROR_VS_BUILD_TOOLS_NOT_INSTALLED
+    IF %ERRORLEVEL% neq 0 EXIT /b %ERRORLEVEL%
+
+    git clone --recursive https://github.com/DwangoMediaVillage/pydomino.git
+    PUSHD pydomino
+    uv pip install .
+    IF %ERRORLEVEL% neq 0 CALL ERROR_PYDOMINO_INSTALL_FAILED
+    POPD
+)
 POPD
 
 @REM install torch
@@ -137,18 +153,74 @@ IF %ERRORLEVEL% neq 0 (
 )
 
 @REM install requirements
+IF EXIST "%CONTENT_DIR%\_skip_install_requirements" GOTO DL_REQUIREMENTS
 ECHO.
 ECHO Info: Check install requirements...
-@REM uv pip install "numpy<2" cython
-@REM @REM uv pip install https://github.com/liyaodev/fairseq/releases/download/v0.12.3.1/fairseq-0.12.3.1-cp311-cp311-win_amd64.whl
-@REM uv pip install -r %CONTENT_DIR%/DiffSinger/requirements.txt
-@REM uv pip install -r %CONTENT_DIR%/SOME/requirements.txt
-@REM uv pip install mido einops tensorboard onnxruntime pydub
-@REM uv pip install onnxscript
+uv pip install "numpy<2" cython
+@REM uv pip install https://github.com/liyaodev/fairseq/releases/download/v0.12.3.1/fairseq-0.12.3.1-cp311-cp311-win_amd64.whl
+uv pip install -r %CONTENT_DIR%/DiffSinger/requirements.txt
+uv pip install -r %CONTENT_DIR%/SOME/requirements.txt
+uv pip install -r %CONTENT_DIR%/SOFA/requirements.txt
+uv pip install mido einops tensorboard onnxruntime pydub
+uv pip install onnxscript
 
+@REM === For transcription ===
+uv pip install transformers
+uv pip install pyopenjtalk-plus
+@REM uv pip install stable-ts punctuators
+
+ECHO. > %CONTENT_DIR%\_skip_install_requirements
+
+:DL_REQUIREMENTS
 @REM download prerequisites
 CALL dl-prerequisites.bat
 
 ECHO.
 ECHO Info: Ready
 ECHO.
+
+EXIT /b 0
+
+
+:ERROR_VS_BUILD_TOOLS_NOT_INSTALLED
+ECHO.
+ECHO Info: Visual Studio Build Tools 2022 is not installed.
+ECHO       Please install Visual Studio Build Tools 2022 and try again if you want to use pydomino.
+ECHO       https://visualstudio.microsoft.com/downloads/
+ECHO       (You can find it under "Tools for Visual Studio" in this page.)
+ECHO       Also, check "C++ build tools" in "Individual components" in the installer.
+ECHO Note: If you have an another build environment in your path (e.g. MSYS2),
+ECHO       you should remove it from your path or workaround it e.g.:
+ECHO           SET PATH=[VSPATH]\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;%%PATH%%
+ECHO           SET PATH=[VSPATH]\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja;%%PATH%%
+ECHO       This is a workaround for the issue that cmake cannot find the MSVC compiler.
+ECHO       and then:
+ECHO           PUSHD content\pydomino
+ECHO           pip install .
+ECHO       in this console.
+ECHO.
+EXIT /b 1
+
+
+:ERROR_PYDOMINO_INSTALL_FAILED
+ECHO.
+ECHO Error: Install process of pydomino perhaps failed.
+ECHO        Please check the error message above and try again.
+ECHO.
+ECHO Note: If you have an another build environment in your path (e.g. MSYS2),
+ECHO       you should remove it from your path or workaround it e.g.
+ECHO           SET PATH=[VSPATH]\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin;%%PATH%%
+ECHO           SET PATH=[VSPATH]\Common7\IDE\CommonExtensions\Microsoft\CMake\Ninja;%%PATH%%
+ECHO       This is a workaround for the issue that cmake cannot find the MSVC compiler.
+ECHO       and then:
+ECHO           PUSHD content\pydomino
+ECHO           RMDIR /S /Q build
+ECHO           uv pip install .
+ECHO       in this console.
+ECHO.
+ECHO  Your current CMake path:
+WHERE cmake
+ECHO  Your current Ninja path:
+WHERE ninja
+ECHO.
+EXIT /b 1

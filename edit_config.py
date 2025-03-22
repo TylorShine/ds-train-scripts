@@ -9,7 +9,7 @@ from pathlib import Path
 
 def parse_args():
     parser = argparse.ArgumentParser(description='DiffSinger configuration editor')
-    parser.add_argument('--model-type', choices=['acoustic', 'variance', 'acoustic_vocoder'], default='acoustic', help='Model type to train')
+    parser.add_argument('--model-type', choices=['acoustic', 'variance'], default='acoustic', help='Model type to train')
     parser.add_argument('--diffusion-type', choices=['ddpm', 'reflow'], default='reflow', help='Diffusion type')
     parser.add_argument('--diff-accelerator', choices=['ddim', 'pndm', 'dpm-solver', 'unipc'], default='ddim', help='Diffusion accelerator')
     parser.add_argument('--loss-type', choices=['l1', 'l2'], default='l2', help='Loss type')
@@ -45,9 +45,6 @@ def get_speaker_info(data_dir):
 def get_test_files(num_spk, raw_dir, data_dir, model_type):
     if num_spk == 1:
         singer_type = "SINGLE-SPEAKER"
-        # if model_type == "acoustic_vocoder":
-        #     use_spk_id = True
-        # else:
         use_spk_id = False
         all_wav_files = []
         for root, _, files in os.walk(data_dir):
@@ -61,12 +58,17 @@ def get_test_files(num_spk, raw_dir, data_dir, model_type):
         use_spk_id = True
         folder_to_id = {os.path.basename(folder): i for i, folder in enumerate(raw_dir)}
         random_test_files = []
-        for folder_path in raw_dir:
-            audio_files = [f[:-4] for f in os.listdir(folder_path) if f.endswith(".ds")]
-            folder_name = os.path.basename(folder_path)
-            folder_id = folder_to_id.get(folder_name, -1)
-            prefixed_audio_files = [f"{folder_id}:{audio_file}" for audio_file in audio_files]
-            random_test_files.extend(prefixed_audio_files[:3])
+        for folder_in_raw_dir in raw_dir:
+            folder_name =  os.path.basename(folder_in_raw_dir)
+            all_wav_files = []
+            for root, _, files in os.walk(folder_in_raw_dir):
+                for file in files:
+                    if file.endswith(".ds"):
+                        folder_id = folder_to_id.get(folder_name, -1)
+                        all_wav_files.append(os.path.join(root, file))
+            random.shuffle(all_wav_files)
+            random_test_files.extend([f"{folder_id}:{os.path.splitext(os.path.basename(file))[0]}" for file in all_wav_files[:1]])
+        # random_test_files = [os.path.splitext(os.path.basename(file))[0] for file in all_wav_files[:3]]
     return singer_type, use_spk_id, random_test_files
 
 def main():

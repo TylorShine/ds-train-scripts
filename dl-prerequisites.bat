@@ -79,6 +79,25 @@ IF %ERRORLEVEL% neq 0 (
     EXIT /b %ERRORLEVEL%
 )
 
+@REM download SOFA Japanese pretrained model
+SET SOFA_JAPANESE_URI=https://github.com/Greenleaf2001/SOFA_Models/releases/download/JPN_Test2/step.100000.ckpt
+SET SOFA_JAPANESE_FILE=sofa.japanese.test2.step.100000.ckpt
+SET SOFA_JAPANESE_DEST=%DOWNLOAD_MODEL_DIR%\%SOFA_JAPANESE_FILE%
+CALL :DOWNLOAD_FILES "SOFA Japanese pretrained model" "%SOFA_JAPANESE_URI%" "%SOFA_JAPANESE_DEST%"
+IF %ERRORLEVEL% neq 0 (
+    pause
+    EXIT /b %ERRORLEVEL%
+)
+
+@REM download SOFA Japanese dictionary file
+SET SOFA_JAPANESE_DICT_URI=https://github.com/Greenleaf2001/SOFA_Models/releases/download/JPN_Test2/japanese-extension-sofa.txt
+SET SOFA_JAPANESE_DICT_FILE=japanese-extension-sofa.txt
+SET SOFA_JAPANESE_DICT_DEST=%CONTENT_DIR%\%SOFA_JAPANESE_DICT_FILE%
+CALL :DOWNLOAD_FILES "SOFA Japanese dictionary file" "%SOFA_JAPANESE_DICT_URI%" "%SOFA_JAPANESE_DICT_DEST%"
+IF %ERRORLEVEL% neq 0 (
+    pause
+    EXIT /b %ERRORLEVEL%
+)
 
 @REM extract hnsep Harmonic-Noise Separation model
 SET HNSEP_EXTRACT_DIR=%CONTENT_DIR%\DiffSinger\checkpoints
