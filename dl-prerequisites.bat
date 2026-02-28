@@ -20,8 +20,8 @@ IF %ERRORLEVEL% neq 0 (
 )
 
 @REM download NSF-HiFiGAN vocoder model from OpenVPI
-SET NSF_HIFIGAN_URI=https://github.com/openvpi/vocoders/releases/download/nsf-hifigan-44.1k-hop512-128bin-2024.02/nsf_hifigan_44.1k_hop512_128bin_2024.02.zip
-SET NSF_HIFIGAN_FILE=nsf_hifigan_44.1k_hop512_128bin_2024.02.zip
+SET NSF_HIFIGAN_URI=https://github.com/openvpi/vocoders/releases/download/pc-nsf-hifigan-44.1k-hop512-128bin-2025.02/pc_nsf_hifigan_44.1k_hop512_128bin_2025.02.zip
+SET NSF_HIFIGAN_FILE=pc_nsf_hifigan_44.1k_hop512_128bin_2025.02.zip
 SET NSF_HIFIGAN_DEST=%CONTENT_DIR%\%NSF_HIFIGAN_FILE%
 CALL :DOWNLOAD_FILES "NSF-HiFiGAN vocoder model" "%NSF_HIFIGAN_URI%" "%NSF_HIFIGAN_DEST%"
 IF %ERRORLEVEL% neq 0 (
@@ -119,7 +119,7 @@ IF %ERRORLEVEL% neq 0 (
 
 @REM extract NSF-HiFiGAN model
 SET NSF_HIFIGAN_EXTRACT_DIR=%CONTENT_DIR%\DiffSinger\checkpoints
-SET NSF_HIFIGAN_EXTRACT_CHECK_FILE=%NSF_HIFIGAN_EXTRACT_DIR%\nsf_hifigan_44.1k_hop512_128bin_2024.02\model.ckpt
+SET NSF_HIFIGAN_EXTRACT_CHECK_FILE=%NSF_HIFIGAN_EXTRACT_DIR%\pc_nsf_hifigan_44.1k_hop512_128bin_2025.02\model.ckpt
 CALL :EXTRACT_ARCHIVE_FILES "NSF-HiFiGAN model" "%NSF_HIFIGAN_DEST%" "%NSF_HIFIGAN_EXTRACT_DIR%" "%NSF_HIFIGAN_EXTRACT_CHECK_FILE%"
 IF %ERRORLEVEL% neq 0 (
     pause
