@@ -10,6 +10,7 @@ def parse_args():
     parser.add_argument('--data_type', choices=['lab_wav', 'csv_wav', 'ds'],
                       default='lab_wav', help='Type of data to process')   # lab_wav: NNSVS format, csv_wav, ds: DiffSinger format
     parser.add_argument('--data_zip_path', type=str, required=True, help='Path to data zip file')
+    parser.add_argument('--no_cleanup', action='store_true', help='Do not cleanup data directory')
     parser.add_argument('--estimate_midi', choices=['False', 'parselmouth', 'harvest', 'SOME'],
                       default='False', help='MIDI estimation method')
     parser.add_argument('--segment_length', type=int, default=15, help='Segment length in seconds')
@@ -33,11 +34,11 @@ def parse_args():
     parser.add_argument('--use_punctuator', action='store_true', help='Use punctuation predictor (e.g. Kotoba-Whisper-v2.1)')
     return parser.parse_args()
 
-def setup_directories():
+def setup_directories(no_cleanup=False):
     all_shits = os.path.join(os.getcwd(), "raw_data")
     all_shits_not_wav_n_lab = os.path.join(all_shits, "diffsinger_db")
     
-    if os.path.exists(all_shits):
+    if not no_cleanup and os.path.exists(all_shits):
         shutil.rmtree(all_shits)
     
     if not os.path.exists(all_shits_not_wav_n_lab):
@@ -520,7 +521,10 @@ def fix_initial_sp(folder_path):
 
 def main():
     args = parse_args()
-    all_shits, all_shits_not_wav_n_lab = setup_directories()
+    if args.no_cleanup:
+        all_shits, all_shits_not_wav_n_lab = setup_directories(no_cleanup=True)
+    else:
+        all_shits, all_shits_not_wav_n_lab = setup_directories()
     
     # Extract archive
     extract_archive(args.data_zip_path, all_shits_not_wav_n_lab)
@@ -533,6 +537,8 @@ def main():
     
     # Generate phoneme dictionary and related files
     phonemes = collect_phonemes(args.data_type, all_shits if args.data_type == "lab_wav" else all_shits_not_wav_n_lab)
+    
+    # TODO: support merge same language files
     vowels, liquids, consonants = generate_phoneme_files(phonemes, "./DiffSinger/dictionaries/custom_dict.txt")
     
     # Generate language JSON

@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import os
 import subprocess
-import zipfile
 import shutil
+import json
 import argparse
 
 def setup_environment(conda_executable="conda"):
@@ -11,8 +11,17 @@ def setup_environment(conda_executable="conda"):
     env_check = f"{conda_executable} env list | grep '^\s{env_name} '"
 
     if os.system(env_check) != 0:
-        os.system(f'{conda_executable} create -n diffsinger_onnx python=3.10 -y')
-        os.system(f'{conda_executable} run -n diffsinger_onnx pip install -r requirements-onnx.txt')
+        subprocess.run(f'{conda_executable} create -n diffsinger_onnx python=3.10 uv -y', shell=True)
+        # subprocess.run(f'{conda_executable} run -n diffsinger_onnx uv pip install setuptools<81', shell=True) # cannot work on cmd.exe...
+        with open("requirements-onnx.txt", "r+") as f:
+            requirements = f.read().split("\n")
+            requirements = [r for r in requirements if not r.startswith("setuptools") and not r.startswith("pyyaml")]
+            requirements.append("setuptools<81")
+            requirements.append("pyyaml")
+            f.seek(0)
+            f.write("\n".join(requirements))
+            f.truncate()
+        subprocess.run(f'{conda_executable} run -n diffsinger_onnx uv pip install -r requirements-onnx.txt', shell=True)
     else:
         print(f"Environment '{env_name}' already exists. Skipping installation.")
 
@@ -151,6 +160,8 @@ def make_ou_compatible(folder_paths, output_path, chara_name, dict_path):
     found_vocoder = False
     
     import yaml
+    
+    languages = {}
                     
     # first pass: find variance folders
     for folder_path in folder_paths:
@@ -170,7 +181,8 @@ def make_ou_compatible(folder_paths, output_path, chara_name, dict_path):
             dsvariance_files = [
                 "variance.onnx",
                 "linguistic.onnx",
-                "phonemes.txt",
+                "diffsinger_variance_phonemes.json",
+                "diffsinger_variance_languages.json",
             ]
             dsvocoder_files = [
                 "vocoder.onnx",
@@ -179,7 +191,8 @@ def make_ou_compatible(folder_paths, output_path, chara_name, dict_path):
             # edit variance config
             with open(os.path.join(folder_path, "dsconfig.yaml"), "r") as f:
                 config = yaml.safe_load(f)
-                config["phonemes"] = "../dsvariance/phonemes.txt"
+                config["phonemes"] = "../dsvariance/diffsinger_variance_phonemes.json"
+                config["languages"] = "../dsvariance/diffsinger_variance_languages.json"
                 config["variance"] = "../dsvariance/variance.onnx"
                 config["linguistic"] = "../dsvariance/linguistic.onnx"
                 config["dur"] = "../dsdur/dur.onnx"
@@ -209,6 +222,9 @@ def make_ou_compatible(folder_paths, output_path, chara_name, dict_path):
                     found_vocoder = True
                     os.makedirs(os.path.join(folder_path, "..", "dsvocoder"), exist_ok=True)
                     shutil.move(os.path.join(folder_path, file), os.path.join(folder_path, "..", "dsvocoder", file))
+            # load languages
+            with open(os.path.join(folder_path, "..", "dsvariance", "diffsinger_variance_languages.json"), "r") as f:
+                languages = json.load(f)
             # write new config
             with open(os.path.join(folder_path, "..", "dsvariance", "dsconfig.yaml"), "w") as f:
                 yaml.dump(config, f, allow_unicode=True)
@@ -237,12 +253,15 @@ def make_ou_compatible(folder_paths, output_path, chara_name, dict_path):
                     print(f"WARNING: no matching emb files found for {folder_path}")
             dsmain_files = [
                 "acoustic.onnx",
+                "diffsinger_acoustic.languages.json",
+                "diffsinger_acoustic.phonemes.json",
             ]
             # edit dsmain config
             with open(os.path.join(folder_path, "dsconfig.yaml"), "r") as f:
                 config = yaml.safe_load(f)
                 config["acoustic"] = "dsmain/acoustic.onnx"
-                config["phonemes"] = "phonemes.txt"
+                config["phonemes"] = "diffsinger_acoustic.phonemes.json"
+                config["languages"] = "diffsinger_acoustic.languages.json"
                 if len(found_emb_files) > 0:
                     config["speakers"] = [os.path.splitext(f)[0] for f in found_emb_files]
                 if found_vocoder:
@@ -291,17 +310,18 @@ def make_ou_compatible(folder_paths, output_path, chara_name, dict_path):
                 "phonemes": phonemes,
             })
             
-    with open(os.path.join(variance_path if variance_path is not None else os.path.join(acoustic_path, ".."), "dictionary.txt"), "r") as f:
-        for line in f:
-            line = line.strip()
-            # if line.startswith("#"):
-            #     continue
-            phonemes = line.split("\t", 1)
-            phoneme_type = "vowel" if phonemes[0] in vowel_symbols else "stop"
-            if phoneme_type == "vowel":
-                vowel_list.append({"symbol": phonemes[0], "type": phoneme_type})
-            else:
-                stop_list.append({"symbol": phonemes[0], "type": phoneme_type})
+    for lang in languages.keys():
+        with open(os.path.join(variance_path if variance_path is not None else os.path.join(acoustic_path, ".."), f"dictionary-{lang}.txt"), "r") as f:
+            for line in f:
+                line = line.strip()
+                # if line.startswith("#"):
+                #     continue
+                phonemes = line.split("\t", 1)
+                phoneme_type = "vowel" if phonemes[0] in vowel_symbols else "stop"
+                if phoneme_type == "vowel":
+                    vowel_list.append({"symbol": phonemes[0], "type": phoneme_type})
+                else:
+                    stop_list.append({"symbol": phonemes[0], "type": phoneme_type})
                 
     # sort vowel_list and stop_list by symbol
     vowel_list.sort(key=lambda x: x["symbol"])
