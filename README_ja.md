@@ -79,7 +79,7 @@ DiffSinger音声合成モデルのトレーニングプロセスを効率化す�
     - ラベルのないデータセットを使用する場合は、`01-extract_data-lab_wav-midi-transcribe-midi.bat`にzipファイルをドラッグ＆ドロップします。
       - さらに、約物記号("！"、"？"または"…")を維持したい場合は、`01-extract_data-lab_wav-midi-transcribe-punct-midi.bat`にzipファイルをドラッグ＆ドロップします。
 
-5. （オプション）`02-edit_config_acoustic.bat`を編集して学習データの出力ディレクトリのパスを設定します。
+5. （オプション）`02-edit_config_acoustic.bat`を編集して学習データの出力ディレクトリのパスやモデルの歌唱言語を設定します。
 
 6. `02-edit_config_acoustic.bat`を実行して設定ファイルを生成します。
 
@@ -90,7 +90,7 @@ DiffSinger音声合成モデルのトレーニングプロセスを効率化す�
     - トレーニング中は、 [localhost:6006](http://localhost:6006/) からトレーニングの進行状況を確認できます。
     - もし、トレーニングプロセスを中断したい場合は、`Ctrl+C`を押してください。
 
-9. （オプション）`05-edit_config_variance.bat`を編集して学習データの出力ディレクトリのパスを設定します。
+9. （オプション）`05-edit_config_variance.bat`を編集して学習データの出力ディレクトリのパスやモデルの歌唱言語を設定します。
 
 10. `05-edit_config_variance.bat`を実行して設定ファイルを生成します。
 

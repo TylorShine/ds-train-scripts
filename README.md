@@ -77,7 +77,7 @@ This repository contains utility scripts that automate the setup and training wo
     - If you will not have labels, D&D `01-extract_data-wav-transcribe-midi.bat` to the zip file.
       - and, you wanna try to keep the punctuations ("!", "?" and "..."), run `01-extract_data-wav-transcribe-punct-midi.bat` instead.
 
-5. (optional) Edit `02-edit_config_acoustic.bat` to set the paths to the output directory.
+5. (optional) Edit `02-edit_config_acoustic.bat` to set the paths to the output directory or language.
 
 6. Run `02-edit_config_acoustic.bat` to generate the configuration file.
 
@@ -88,7 +88,7 @@ This repository contains utility scripts that automate the setup and training wo
     - During the training process, you can check the training progress on [localhost:6006](http://localhost:6006/)
     - If you want to stop the training process, press `Ctrl+C` in the terminal. You can resume the training process by running `04-train_acoustic.bat` again.
 
-9. (optional) Edit `05-edit_config_variance.bat` to set the paths to the output directory.
+9. (optional) Edit `05-edit_config_variance.bat` to set the paths to the output directory or language.
 
 10. Run `05-edit_config_variance.bat` to generate the configuration file.
 
