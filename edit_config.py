@@ -14,6 +14,7 @@ def parse_args():
     parser.add_argument('--diff-accelerator', choices=['ddim', 'pndm', 'dpm-solver', 'unipc'], default='ddim', help='Diffusion accelerator')
     parser.add_argument('--loss-type', choices=['l1', 'l2'], default='l2', help='Loss type')
     parser.add_argument('--data-dir', required=True, help='Directory containing raw data')
+    parser.add_argument('--language', default='zh', help='Language')
     parser.add_argument('--use-shallow-diffusion', choices=['false', 'true_aux_val', 'true_gt_val'], default='true_gt_val', help='Shallow diffusion training mode')
     parser.add_argument('--precision', choices=['32-true', 'bf16-mixed', '16-mixed', 'bf16', '16'], default='16-mixed', help='Training precision')
     parser.add_argument('--save-dir', required=True, help='Model save directory')
@@ -52,12 +53,13 @@ def get_test_files(num_spk, raw_dir, data_dir, model_type):
                 if file.endswith((".wav", ".ds")):
                     all_wav_files.append(os.path.join(root, file))
         random.shuffle(all_wav_files)
-        random_test_files = [os.path.splitext(os.path.basename(file))[0] for file in all_wav_files[:3]]
+        # random_test_files = [os.path.splitext(os.path.basename(file))[0] for file in all_wav_files[:3]]
+        random_test_files = {0: [os.path.splitext(os.path.basename(file))[0] for file in all_wav_files[:3]]}
     else:
         singer_type = "MULTI-SPEAKER"
         use_spk_id = True
         folder_to_id = {os.path.basename(folder): i for i, folder in enumerate(raw_dir)}
-        random_test_files = []
+        random_test_files = {}
         for folder_in_raw_dir in raw_dir:
             folder_name =  os.path.basename(folder_in_raw_dir)
             all_wav_files = []
@@ -67,7 +69,8 @@ def get_test_files(num_spk, raw_dir, data_dir, model_type):
                         folder_id = folder_to_id.get(folder_name, -1)
                         all_wav_files.append(os.path.join(root, file))
             random.shuffle(all_wav_files)
-            random_test_files.extend([f"{folder_id}:{os.path.splitext(os.path.basename(file))[0]}" for file in all_wav_files[:1]])
+            random_test_files[folder_to_id[folder_name]] = [f"{os.path.splitext(os.path.basename(file))[0]}" for file in all_wav_files[:1]]
+            # random_test_files.extend([f"{folder_id}:{os.path.splitext(os.path.basename(file))[0]}" for file in all_wav_files[:1]])
         # random_test_files = [os.path.splitext(os.path.basename(file))[0] for file in all_wav_files[:3]]
     return singer_type, use_spk_id, random_test_files
 
@@ -159,6 +162,22 @@ def main():
         use_glide_embed = False
         
     duration_training = True
+    
+    language = [args.language] * num_spk
+    
+    dicts = {
+        k: "dictionaries/custom_dict.txt" for k in language
+    }
+    
+    dataset = [
+        {
+            "raw_data_dir": dd,
+            "speaker": spn,
+            "test_prefixes": random_test_files[sid],
+            "language": lng,
+            "spk_id": sid,
+        } for dd, spn, lng, sid in zip(raw_dir, spk_names, language, range(num_spk))
+    ]
 
     # Update common configurations
     model_config.update({
@@ -166,6 +185,8 @@ def main():
         "test_prefixes": random_test_files,
         "raw_data_dir": raw_dir,
         "num_spk": num_spk,
+        "datasets": dataset,
+        "dictionaries": dicts,
         "use_spk_id": use_spk_id,
         "diffusion_type": args.diffusion_type,
         "diff_accelerator": args.diff_accelerator,

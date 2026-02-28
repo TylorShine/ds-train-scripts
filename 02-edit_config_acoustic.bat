@@ -35,6 +35,7 @@ CD content\DiffSinger
 SET SAVE_DIR=../trained_models/diffsinger
 
 SET DATA_DIR=../raw_data/diffsinger_db
+SET LANGUAGE=ja
 SET MODEL_TYPE=acoustic
 SET DIFFUSION_TYPE=reflow
 SET DIFF_ACCELERATOR=ddim
@@ -57,6 +58,6 @@ SET PITCH_NUM_CHANNELS=512
 SET VARIANCE_NUM_LAYERS=6
 SET VARIANCE_NUM_CHANNELS=384
 
-python ..\..\edit_config.py --data-dir "%DATA_DIR%" --save-dir "%SAVE_DIR%" --model-type %MODEL_TYPE% --diffusion-type %DIFFUSION_TYPE% --diff-accelerator %DIFF_ACCELERATOR% --loss-type %LOSS_TYPE% --use-shallow-diffusion %USE_SHALLOW_DIFFUSION% --precision %PRECISION% --selected-param %SELECTED_PARAM% --parameter-extraction %PARAMETER_EXTRACTION% --pitch-training %PITCH_TRAINING% --f0-extractor %F0_EXTRACTOR% --sampling-algorithm %SAMPLING_ALGORITHM% --acoustic-hidden-size %ACOUSTIC_HIDDEN_SIZE% --acoustic-num-layers %ACOUSTIC_NUM_LAYERS% --acoustic-num-channels %ACOUSTIC_NUM_CHANNELS% --variance-hidden-size %VARIANCE_HIDDEN_SIZE% --duration-hidden-size %DURATION_HIDDEN_SIZE% --melody-encoder-hidden-size %MELODY_ENCODER_HIDDEN_SIZE% --pitch-num-layers %PITCH_NUM_LAYERS% --pitch-num-channels %PITCH_NUM_CHANNELS% --variance-num-layers %VARIANCE_NUM_LAYERS% --variance-num-channels %VARIANCE_NUM_CHANNELS%
+python ..\..\edit_config.py --data-dir "%DATA_DIR%" --save-dir "%SAVE_DIR%" --language "%LANGUAGE%" --model-type %MODEL_TYPE% --diffusion-type %DIFFUSION_TYPE% --diff-accelerator %DIFF_ACCELERATOR% --loss-type %LOSS_TYPE% --use-shallow-diffusion %USE_SHALLOW_DIFFUSION% --precision %PRECISION% --selected-param %SELECTED_PARAM% --parameter-extraction %PARAMETER_EXTRACTION% --pitch-training %PITCH_TRAINING% --f0-extractor %F0_EXTRACTOR% --sampling-algorithm %SAMPLING_ALGORITHM% --acoustic-hidden-size %ACOUSTIC_HIDDEN_SIZE% --acoustic-num-layers %ACOUSTIC_NUM_LAYERS% --acoustic-num-channels %ACOUSTIC_NUM_CHANNELS% --variance-hidden-size %VARIANCE_HIDDEN_SIZE% --duration-hidden-size %DURATION_HIDDEN_SIZE% --melody-encoder-hidden-size %MELODY_ENCODER_HIDDEN_SIZE% --pitch-num-layers %PITCH_NUM_LAYERS% --pitch-num-channels %PITCH_NUM_CHANNELS% --variance-num-layers %VARIANCE_NUM_LAYERS% --variance-num-channels %VARIANCE_NUM_CHANNELS%
 
 pause
