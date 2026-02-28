@@ -6,8 +6,8 @@ IF NOT EXIST "%DOWNLOAD_CACHE_DIR%" mkdir "%DOWNLOAD_CACHE_DIR%"
 
 
 @REM download Micromamba
-@REM SET MAMBA_DIR=https://micro.mamba.pm/api/micromamba/win-64/latest
-SET MAMBA_DIR=https://github.com/mamba-org/micromamba-releases/releases/download/1.5.10-0/micromamba-win-64.tar.bz2
+SET MAMBA_DIR=https://micro.mamba.pm/api/micromamba/win-64/latest
+@REM SET MAMBA_DIR=https://github.com/mamba-org/micromamba-releases/releases/download/1.5.10-0/micromamba-win-64.tar.bz2
 SET MAMBA_FILE=micromamba.tar.bz2
 SET MAMBA_BIN=%DOWNLOAD_CACHE_DIR%\%MAMBA_FILE%
 IF NOT EXIST "%MAMBA_BIN%" (
@@ -42,7 +42,7 @@ if exist "%MAMBA_ROOT_PREFIX%\Scripts\" (
   goto :ACTIVATE
 )
 
-"%MICROMAMBA_BIN%" shell hook -s cmd.exe -p "%MAMBA_ROOT_PREFIX%" -v
+"%MICROMAMBA_BIN%" shell hook -s cmd.exe -r "%MAMBA_ROOT_PREFIX%" -v
 
 :ACTIVATE
 @REM call mamba_hook.bat
@@ -136,6 +136,7 @@ IF NOT EXIST "pydomino" (
 
     git clone --recursive https://github.com/DwangoMediaVillage/pydomino.git
     PUSHD pydomino
+    uv pip install cmake ninja
     uv pip install .
     IF %ERRORLEVEL% neq 0 CALL ERROR_PYDOMINO_INSTALL_FAILED
     POPD
@@ -162,11 +163,12 @@ uv pip install -r %CONTENT_DIR%/DiffSinger/requirements.txt
 uv pip install -r %CONTENT_DIR%/SOME/requirements.txt
 uv pip install -r %CONTENT_DIR%/SOFA/requirements.txt
 uv pip install mido einops tensorboard onnxruntime pydub
-uv pip install onnxscript
+uv pip install onnxscript pyyaml
 
 @REM === For transcription ===
-uv pip install transformers
+uv pip install transformers soxr
 uv pip install pyopenjtalk-plus
+uv pip install "setuptools<81"
 @REM uv pip install stable-ts punctuators
 
 ECHO. > %CONTENT_DIR%\_skip_install_requirements
