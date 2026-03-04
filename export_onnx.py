@@ -260,8 +260,8 @@ def make_ou_compatible(folder_paths, output_path, chara_name, dict_path):
             with open(os.path.join(folder_path, "dsconfig.yaml"), "r") as f:
                 config = yaml.safe_load(f)
                 config["acoustic"] = "dsmain/acoustic.onnx"
-                config["phonemes"] = "diffsinger_acoustic.phonemes.json"
-                config["languages"] = "diffsinger_acoustic.languages.json"
+                config["phonemes"] = "dsmain/diffsinger_acoustic.phonemes.json"
+                config["languages"] = "dsmain/diffsinger_acoustic.languages.json"
                 if len(found_emb_files) > 0:
                     config["speakers"] = [os.path.splitext(f)[0] for f in found_emb_files]
                 if found_vocoder:
