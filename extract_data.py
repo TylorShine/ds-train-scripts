@@ -15,11 +15,14 @@ def parse_args():
                       default='False', help='MIDI estimation method')
     parser.add_argument('--segment_length', type=int, default=15, help='Segment length in seconds')
     parser.add_argument('--max_silence_phoneme', type=int, default=2, help='Maximum silence phonemes allowed')
+    parser.add_argument('--transcription_batch_size', type=int, default=1, help='Batch size for transcription')
     parser.add_argument('--transcription_model', type=str,
                       default='False', help='Model for transcription (when no exist it)\n ex) `openai/whisper-large`')
     parser.add_argument('--transcription_language', type=str,
                       default='ja', help='Language for transcription')
-    parser.add_argument('--g2p_alignment_type', choices=['openjtalk+SOFA', 'openjtalk+domino'],
+    parser.add_argument('--transcription_phoneme_model', type=str,
+                        default='False', help='Model for transcription with phoneme (when no exist it)\n ex) `TylorShine/wavlm-base-plus-hiragana-ctc`')
+    parser.add_argument('--g2p_alignment_type', choices=['openjtalk+SOFA', 'openjtalk+domino', 'domino'],
                       default='openjtalk+SOFA', help='G2P alignment type')
     parser.add_argument('--g2p_model_path', type=str,
                       default='pydomino/onnx_model/phoneme_transition_model.onnx',
@@ -47,7 +50,8 @@ def setup_directories(no_cleanup=False):
     return all_shits, all_shits_not_wav_n_lab
 
 def extract_archive(data_zip_path, extract_path):
-    os.system(f'7z x "{data_zip_path}" -o{extract_path}')
+    if os.path.exists(data_zip_path):
+        os.system(f'7z x "{data_zip_path}" -o{extract_path}')
 
 def process_lab_files(root_path):
     for root, _, files in os.walk(root_path):
@@ -140,34 +144,48 @@ def generate_phoneme_files(phonemes, dict_path):
 
 
 def make_lab_files(args, root_path):
-    if args.transcription_model == 'False':
+    if args.transcription_model == 'False' and args.transcription_phoneme_model == 'False':
+        print("No transcription model or phoneme model specified. Skipping...")
         return
     
     import torch
     from transformers import pipeline, AutoProcessor
+    import numpy as np
     import librosa
     from tqdm import tqdm
-    if args.g2p_alignment_type == 'openjtalk+SOFA':
+    if args.g2p_alignment_type.startswith('openjtalk'):
         from g2p_openjtalk import g2p_openjtalk as g2p
-        sofa_infer_script = "./SOFA/infer.py"
         
+    if args.g2p_alignment_type.endswith('SOFA'):
+        sofa_infer_script = "./SOFA/infer.py"
     elif args.g2p_alignment_type.endswith('domino'):
-        from g2p_openjtalk import g2p_openjtalk as g2p
         from align_domino import align_domino as aligner
         from align_domino import pre_cleanup as aligner_pre_cleanup
+        
+    if args.transcription_phoneme_model != 'False':
+        from transformers import AutoModel, AutoTokenizer, AutoFeatureExtractor
         
     global g2p_model
     g2p_model = None
         
     global transcription_model
     transcription_model = None
+    
+    global transcription_phoneme_model
+    transcription_phoneme_model = None
+    
+    global transcription_g2p_tokenizers
+    transcription_g2p_tokenizers = None
+    global transcription_g2p_feature_extractor
+    transcription_g2p_feature_extractor = None
         
     def make_lab_into_dir(root_path):
-        global transcription_model, g2p_model
+        global transcription_model, g2p_model, transcription_phoneme_model
         for root, _, files in os.walk(root_path):
             wav_exists = False
             max_wav_duration = 0.0
             need_transcription_files = []
+            need_phonemization_files = []
             need_alignment_files = []
             file_paths = [os.path.join(root, file) for file in files]
             for filename in files:
@@ -176,71 +194,119 @@ def make_lab_files(args, root_path):
                     make_lab_into_dir(file_path)
                 elif os.path.isfile(file_path) and file_path.endswith('.wav'):
                     wav_exists = True
-                    if not os.path.splitext(file_path)[0] + '.lab' in file_paths and args.transcription_model != 'False':
+                    if not os.path.splitext(file_path)[0] + '.lab' in file_paths and (args.transcription_model != 'False' or args.transcription_phoneme_model != 'False'):
                         wav_duration = librosa.get_duration(filename=file_path)
                         if wav_duration > max_wav_duration:
                             max_wav_duration = wav_duration
                         need_alignment_files.append(file_path)
                         if not os.path.splitext(file_path)[0] + '.txt' in file_paths:
                             need_transcription_files.append(file_path)
+                        if not os.path.splitext(file_path)[0] + '.phonemes.txt' in file_paths:
+                            need_phonemization_files.append(file_path)
             # need_alignment_files = set(need_alignment_files)
             # need_transcription_files = set(need_transcription_files)
             already_transcription_files = set(need_alignment_files) - set(need_transcription_files)
+            already_phonemization_files = set(need_alignment_files) - set(need_phonemization_files)
             if wav_exists == True and len(need_alignment_files) > 0:
                 # transcription and alignment
-                if len(need_transcription_files) > 0:
-                    # return_timestamps = max_wav_duration > 30.0 if args.g2p_alignment_type != 'whisper+domino' else "word"
-                    return_timestamps = max_wav_duration > 30.0
-                    batch_size = 1
-                    # generate_kwargs = {"language": args.transcription_language, "task": "transcribe", "return_timestamps": return_timestamps}
-                    generate_kwargs = {"language": args.transcription_language, "task": "transcribe"}
-                    if transcription_model is None:
-                        torch_dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
-                        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-                        if torch.cuda.is_available():
-                            if return_timestamps == "word":
-                                model_kwargs = {"attn_implementation": "eager"}
+                if len(need_transcription_files) + len(need_phonemization_files) > 0:
+                    torch_dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
+                    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+                    if args.transcription_phoneme_model == 'False':
+                        # return_timestamps = max_wav_duration > 30.0 if args.g2p_alignment_type != 'whisper+domino' else "word"
+                        return_timestamps = max_wav_duration > 30.0
+                        # generate_kwargs = {"language": args.transcription_language, "task": "transcribe", "return_timestamps": return_timestamps}
+                        generate_kwargs = {"language": args.transcription_language, "task": "transcribe"}
+                        if transcription_model is None:
+                            if torch.cuda.is_available():
+                                if return_timestamps == "word":
+                                    model_kwargs = {"attn_implementation": "eager"}
+                                else:
+                                    model_kwargs = {"attn_implementation": "sdpa"}
                             else:
-                                model_kwargs = {"attn_implementation": "sdpa"}
-                        else:
-                            model_kwargs = {}
+                                model_kwargs = {}
+                                
+                            pipeline_kwargs = {
+                                "trust_remote_code": True,
+                            }
+                            if args.use_punctuator:
+                                pipeline_kwargs["punctuator"] = True
+                                
+                            processor = AutoProcessor.from_pretrained(args.transcription_model)
                             
-                        pipeline_kwargs = {
-                            "trust_remote_code": True,
-                        }
-                        if args.use_punctuator:
-                            pipeline_kwargs["punctuator"] = True
-                            
-                        processor = AutoProcessor.from_pretrained(args.transcription_model)
-                        
-                        transcription_model = pipeline(
-                            # "automatic-speech-recognition",
-                            torch_dtype=torch_dtype,
-                            device=device,
-                            feature_extractor=processor.feature_extractor,
-                            model=args.transcription_model,    # "openai/whisper-base", "openai/whisper-small", "openai/whisper-medium", "openai/whisper-large" etc.
-                            model_kwargs=model_kwargs,
-                            **pipeline_kwargs,
-                        )
-                    transcribed_texts = transcription_model(need_transcription_files, generate_kwargs=generate_kwargs, return_timestamps=return_timestamps, batch_size=batch_size)
+                            transcription_model = pipeline(
+                                # "automatic-speech-recognition",
+                                torch_dtype=torch_dtype,
+                                device=device,
+                                feature_extractor=processor.feature_extractor,
+                                model=args.transcription_model,    # "openai/whisper-base", "openai/whisper-small", "openai/whisper-medium", "openai/whisper-large" etc.
+                                model_kwargs=model_kwargs,
+                                **pipeline_kwargs,
+                            )
+                        transcribed_texts = transcription_model(need_transcription_files, generate_kwargs=generate_kwargs, return_timestamps=return_timestamps, batch_size=args.transcription_batch_size)
+                    else:
+                        print(f"Transcription with phoneme model: {args.transcription_phoneme_model}")
+                        if transcription_phoneme_model is None:
+                            tokenizer_subfolders = ["kana_tokenizer", "phoneme_tokenizer"]
+                            transcription_g2p_feature_extractor = AutoFeatureExtractor.from_pretrained(args.transcription_phoneme_model, trust_remote_code=True)
+                            transcription_g2p_tokenizers = {
+                                "kana_tokenizer": AutoTokenizer.from_pretrained(args.transcription_phoneme_model, trust_remote_code=True, subfolder=tokenizer_subfolders[0]),
+                                "phoneme_tokenizer": AutoTokenizer.from_pretrained(args.transcription_phoneme_model, trust_remote_code=True, subfolder=tokenizer_subfolders[1]),
+                            }
+                            transcription_phoneme_model = AutoModel.from_pretrained(args.transcription_phoneme_model, trust_remote_code=True).to(device)
+                        transcribed_texts = []
+                        need_transcription_files_batched = [need_transcription_files[i:i+args.transcription_batch_size] for i in range(0, len(need_transcription_files), args.transcription_batch_size)]
+                        with torch.no_grad():
+                            for i, need_transcription_files_batch in enumerate(tqdm(need_transcription_files_batched, desc='transcription+g2p')):
+                                wav_files = [wav for wav, _ in [librosa.load(wav_path, sr=16_000, mono=True, dtype=np.float32) for wav_path in need_transcription_files_batch]]
+                                max_wav_samples = max(len(wav) for wav in wav_files)
+                                max_wav_samples = max_wav_samples + 8_000   # +0.5s
+                                wav_files_padded = np.array([np.pad(wav, (max_wav_samples - len(wav), 0), 'constant') for wav in wav_files])
+                                features = transcription_g2p_feature_extractor(wav_files_padded, sampling_rate=16_000, return_tensors="pt", return_attention_mask=True)
+                                input_values = features.input_values.to(device)
+                                attention_mask = features.attention_mask.to(device)
+                                outputs = transcription_phoneme_model(input_values, attention_mask=attention_mask)
+                                kana_logits_argmax = outputs["kana_logits"].argmax(dim=-1).to("cpu").tolist()
+                                phoneme_logits_argmax = outputs["phoneme_logits"].argmax(dim=-1).to("cpu").tolist()
+                                kanas = [transcription_phoneme_model.ctc_decode(kana_logits, transcription_g2p_tokenizers["kana_tokenizer"], is_kana=True) for kana_logits in kana_logits_argmax]
+                                phonemes = [transcription_phoneme_model.ctc_decode(phoneme_logits, transcription_g2p_tokenizers["phoneme_tokenizer"]) for phoneme_logits in phoneme_logits_argmax]
+                                kanas = ["…" if kana.strip() == "" else kana for kana in kanas]
+                                phonemes = ["…" if phoneme.strip() == "" else phoneme for phoneme in phonemes]
+                                transcribed_texts.extend([{"text": kana, "phoneme": phoneme} for kana, phoneme in zip(kanas, phonemes)])
+                                
+                                del features, input_values, attention_mask, outputs, kana_logits_argmax, phoneme_logits_argmax, kanas, phonemes
+                                del wav_files, wav_files_padded
+                                if device.type == "cuda":
+                                    torch.cuda.empty_cache()
                 all_texts = {}
+                phonemeses = {}
                 # save transcripted texts
                 for i in range(len(need_transcription_files)):
                     text_file = os.path.splitext(need_transcription_files[i])[0] + '.txt'
-                    if os.path.exists(text_file):
-                        # should not happen
-                        continue
-                    all_texts[need_transcription_files[i]] = transcribed_texts[i]["text"]
-                    with open(os.path.splitext(need_transcription_files[i])[0] + '.txt', 'w') as f:
-                        f.write(transcribed_texts[i]["text"])
+                    if not os.path.exists(text_file):
+                        all_texts[need_transcription_files[i]] = transcribed_texts[i]["text"]
+                        with open(text_file, 'w') as f:
+                            f.write(transcribed_texts[i]["text"])
+                    if args.transcription_phoneme_model != 'False':
+                        if need_transcription_files[i] in already_phonemization_files:
+                            continue
+                        phoneme_file = os.path.splitext(need_transcription_files[i])[0] + '.phonemes.txt'
+                        phonemeses[need_transcription_files[i]] = transcribed_texts[i]["phoneme"]
+                        with open(phoneme_file, 'w') as f:
+                            f.write(transcribed_texts[i]["phoneme"])
                 # read existing text files
                 for t in already_transcription_files:
                     with open(os.path.splitext(t)[0] + '.txt', 'r') as f:
                         all_texts[t] = f.read()
-                if args.g2p_alignment_type == 'openjtalk+SOFA':
+                for t in already_phonemization_files:
+                    with open(os.path.splitext(t)[0] + '.phonemes.txt', 'r') as f:
+                        phonemeses[t] = f.read()
+                if args.g2p_alignment_type.endswith('SOFA'):
                     # g2p
-                    # phonemeses = [g2p(transcribed_text["text"]) for transcribed_text in tqdm(transcribed_texts, desc='g2p')]
-                    phonemeses = {k: g2p(text) for k, text in tqdm(all_texts.items(), desc='g2p')}
+                    # phonemeses = {k: g2p(text) for k, text in tqdm(all_texts.items(), desc='g2p')}
+                    should_be_phonemized = [k for k in all_texts.keys() if k not in phonemeses.keys()]
+                    added_phonemeses = {k: g2p(text, args.transcription_language) for k, text in tqdm([all_texts[k] for k in should_be_phonemized], desc='g2p')}
+                    phonemeses.update(added_phonemeses)
                     
                     empty_phoneme_keys = []
                     for k, p in phonemeses.items():
@@ -391,10 +457,13 @@ def make_lab_files(args, root_path):
                             phonemeses[k] = '\n'.join('\t'.join(p) for p in phonemes)
                     else:
                         # phonemeses = [g2p(transcribed_text["text"]) for transcribed_text in tqdm(transcribed_texts, desc='g2p')]
-                        phonemeses = {k: g2p(text) for k, text in tqdm(all_texts.items(), desc='g2p')}
+                        # phonemeses = {k: g2p(text) for k, text in tqdm(all_texts.items(), desc='g2p')}
+                        should_be_phonemized = [k for k in all_texts.keys() if k not in phonemeses.keys()]
+                        added_phonemeses = {k: g2p(text) for (k, text) in tqdm([(j, all_texts[j]) for j in should_be_phonemized], desc='g2p')}
+                        phonemeses.update(added_phonemeses)
                         # phonemeses = [g2p(transcribed_text["text"]) for transcribed_text in tqdm(transcribed_texts, desc='g2p')]
                         # save phonemes
-                        for k, p in phonemeses.items():
+                        for k, p in added_phonemeses.items():
                             with open(os.path.splitext(k)[0] + '.phonemes.txt', 'w') as f:
                                 f.write(p)
                         # align
