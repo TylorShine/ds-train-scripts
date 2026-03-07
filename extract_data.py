@@ -180,7 +180,7 @@ def make_lab_files(args, root_path):
     transcription_g2p_feature_extractor = None
         
     def make_lab_into_dir(root_path):
-        global transcription_model, g2p_model, transcription_phoneme_model
+        global transcription_model, g2p_model, transcription_phoneme_model, transcription_g2p_tokenizers, transcription_g2p_feature_extractor
         for root, _, files in os.walk(root_path):
             wav_exists = False
             max_wav_duration = 0.0
