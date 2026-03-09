@@ -391,7 +391,7 @@ def main():
     parser.add_argument('--conda', type=str, help='Path to conda executable', default='conda')
     parser.add_argument('--make_ou_compatible', action='store_true', help='Make files compatible with OpenUtau')
     parser.add_argument('--dict_file', type=str, default='../../jpn_dict_stops.txt', help='Path to dictionary file')
-    parser.add_argument('--chara_name', type=str, default='your diffsinger voice bank', help='Character name')
+    parser.add_argument('--chara_name', type=str, default=None, help='Character name')
     args = parser.parse_args()
 
     # Setup environment
@@ -411,7 +411,14 @@ def main():
     # Rename files
     if folder_paths:
         if args.make_ou_compatible:
-            final_output_path = make_ou_compatible(folder_paths, args.output, args.chara_name, args.dict_file)
+            chara_name = "your diffsinger voice bank"
+            if os.path.exists(os.path.join(args.output, "..", "..", "project_name.txt")):
+                with open(os.path.join(args.output, "..", "..", "project_name.txt"), "r") as f:
+                    _chara_name = f.read().strip()
+                    if _chara_name:
+                        chara_name = _chara_name
+            chara_name = args.chara_name if args.chara_name else chara_name
+            final_output_path = make_ou_compatible(folder_paths, args.output, chara_name, args.dict_file)
             print(f"\nONNX export complete: {final_output_path}.\nEdit character.txt to finalize your model before publish it!\n Please refer to https://github.com/xunmengshe/OpenUtau/wiki/Voicebank-Development for more information")
         else:
             rename_files(folder_paths)

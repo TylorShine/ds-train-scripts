@@ -21,14 +21,14 @@ def parse_args():
     parser.add_argument('--transcription_language', type=str,
                       default='ja', help='Language for transcription')
     parser.add_argument('--transcription_phoneme_model', type=str,
-                        default='False', help='Model for transcription with phoneme (when no exist it)\n ex) `TylorShine/wavlm-base-plus-hiragana-ctc`')
-    parser.add_argument('--g2p_alignment_type', choices=['openjtalk+SOFA', 'openjtalk+domino', 'domino'],
+                        default='False', help='Model for transcription with phoneme (when no exist it)\n ex) `TylorShine/wavlm-base-plus-hiragana-ctc-v2`')
+    parser.add_argument('--g2p_alignment_type', choices=['openjtalk+SOFA', 'openjtalk+domino', 'domino', 'ctc'],
                       default='openjtalk+SOFA', help='G2P alignment type')
     parser.add_argument('--g2p_model_path', type=str,
                       default='pydomino/onnx_model/phoneme_transition_model.onnx',
                       help="G2P model path")
     parser.add_argument('--sofa_model_path', type=str,
-                      default="pretrain_models/sofa.japanese.test2.step.100000.ckpt",
+                      default="pretrain_models/sofa.japanese.test2.plus.step.100000.ckpt",
                       help="SOFA model path")
     parser.add_argument('--sofa_dict_path', type=str,
                       default="../japanese-extension-sofa-added.txt",
@@ -51,6 +51,10 @@ def setup_directories(no_cleanup=False):
 
 def extract_archive(data_zip_path, extract_path):
     if os.path.exists(data_zip_path):
+        zip_file_name = os.path.splitext(os.path.basename(data_zip_path))[0]
+        with open(os.path.join(extract_path, "..", "..", "project_name.txt"), "w") as f:
+            f.write(zip_file_name)
+            
         os.system(f'7z x "{data_zip_path}" -o{extract_path}')
 
 def process_lab_files(root_path):
@@ -163,6 +167,7 @@ def make_lab_files(args, root_path):
         from align_domino import pre_cleanup as aligner_pre_cleanup
         
     if args.transcription_phoneme_model != 'False':
+        import torchaudio
         from transformers import AutoModel, AutoTokenizer, AutoFeatureExtractor
         
     global g2p_model
@@ -209,6 +214,8 @@ def make_lab_files(args, root_path):
             already_phonemization_files = set(need_alignment_files) - set(need_phonemization_files)
             if wav_exists == True and len(need_alignment_files) > 0:
                 # transcription and alignment
+                phonemeses = {}
+                all_texts = {}
                 if len(need_transcription_files) + len(need_phonemization_files) > 0:
                     torch_dtype = torch.bfloat16 if torch.cuda.is_available() else torch.float32
                     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -256,6 +263,52 @@ def make_lab_files(args, root_path):
                             transcription_phoneme_model = AutoModel.from_pretrained(args.transcription_phoneme_model, trust_remote_code=True).to(device)
                         transcribed_texts = []
                         need_transcription_files_batched = [need_transcription_files[i:i+args.transcription_batch_size] for i in range(0, len(need_transcription_files), args.transcription_batch_size)]
+                        
+                        def get_ctc_forced_alignment(
+                            logits: torch.Tensor,
+                            token_ids: list[int],
+                            blank_id: int = 0,
+                            frame_rate: float = 50.0,  # 50 frames/sec (20ms/frame) for HuBERT
+                            pad_sec: float = 0.1,      # padded silence length (sec)
+                            delay_sec: float = 0.0    # calibration delay for Emission Delay of CTC (sec)
+                        ):
+                            if logits.ndim == 2:
+                                logits = logits.unsqueeze(0)  # add batch dimension (1, frames, num_tokens)
+                                
+                            # targets = torch.tensor(token_ids, dtype=torch.int32, device=logits.device)
+                            targets = token_ids
+                            # remove blank
+                            targets = targets[targets != blank_id]
+                            if targets.ndim == 1:
+                                targets = targets.unsqueeze(0)  # add batch dimension (1, num_tokens)
+                            # print(targets)
+                            
+                            # Forced Alignment
+                            alignments, scores = torchaudio.functional.forced_align(logits, targets, blank=blank_id)
+                            alignments = alignments[0]
+                            scores = scores[0].exp()  # back to probability
+                            
+                            # merge tokens
+                            token_spans = torchaudio.functional.merge_tokens(alignments, scores)
+                            
+                            total_offset_sec = pad_sec + delay_sec
+                            results =[]
+                            for span in token_spans:
+                                # frame index to sec
+                                start_time_sec = span.start / frame_rate
+                                end_time_sec = span.end / frame_rate
+                                # correct time
+                                corrected_start = max(0.0, start_time_sec - total_offset_sec)
+                                corrected_end   = max(0.0, end_time_sec - total_offset_sec)
+                                results.append({
+                                    "token_id": span.token,
+                                    "start_time": round(corrected_start, 3),
+                                    "end_time": round(corrected_end, 3),
+                                    "score": round(span.score, 4)
+                                })
+                                
+                            return results, total_offset_sec
+                        
                         with torch.no_grad():
                             for i, need_transcription_files_batch in enumerate(tqdm(need_transcription_files_batched, desc='transcription+g2p')):
                                 wav_files = [wav for wav, _ in [librosa.load(wav_path, sr=16_000, mono=True, dtype=np.float32) for wav_path in need_transcription_files_batch]]
@@ -266,10 +319,134 @@ def make_lab_files(args, root_path):
                                 input_values = features.input_values.to(device)
                                 attention_mask = features.attention_mask.to(device)
                                 outputs = transcription_phoneme_model(input_values, attention_mask=attention_mask)
-                                kana_logits_argmax = outputs["kana_logits"].argmax(dim=-1).to("cpu").tolist()
-                                phoneme_logits_argmax = outputs["phoneme_logits"].argmax(dim=-1).to("cpu").tolist()
-                                kanas = [transcription_phoneme_model.ctc_decode(kana_logits, transcription_g2p_tokenizers["kana_tokenizer"], is_kana=True) for kana_logits in kana_logits_argmax]
-                                phonemes = [transcription_phoneme_model.ctc_decode(phoneme_logits, transcription_g2p_tokenizers["phoneme_tokenizer"]) for phoneme_logits in phoneme_logits_argmax]
+                                kana_logits_argmax = outputs["kana_logits"].argmax(dim=-1)
+                                phoneme_logits_argmax = outputs["phoneme_logits"].argmax(dim=-1)
+                                if args.g2p_alignment_type.endswith('ctc'):
+                                    for i, (phoneme_logits, filename) in enumerate(zip(outputs["phoneme_logits"], need_transcription_files_batch)):
+                                        additional_padded_sec = (max_wav_samples - len(wav_files[i])) / 16_000
+                                        phoneme_aligned, total_offset_sec = get_ctc_forced_alignment(phoneme_logits, phoneme_logits_argmax[i], pad_sec=additional_padded_sec, blank_id=transcription_g2p_tokenizers["phoneme_tokenizer"].pad_token_id)
+                                        
+                                        wav_array = wav_files[i]
+                                        
+                                        is_speech = np.zeros(len(wav_array), dtype=bool)
+                                        non_silent_intervals = librosa.effects.split(wav_array, top_db=30)
+                                        for start_samp, end_samp in non_silent_intervals:
+                                            is_speech[start_samp:end_samp] = True
+                                        
+                                        phonemes = [["0", "0", "pau"]]
+                                        current_sec = 0.0
+                                        for item in phoneme_aligned:
+                                            # get char from token id in phoneme_aligned
+                                            phoneme = transcription_g2p_tokenizers["phoneme_tokenizer"].decode(item["token_id"])
+                                            start_sec = item["start_time"]
+                                            end_sec = item["end_time"]
+                                            
+                                            if end_sec <= start_sec:
+                                                continue
+                                            
+                                            if start_sec > current_sec and len(phonemes) > 0:
+                                                # # add silence
+                                                # sil_start_htk = int(round(current_sec * 10_000_000))
+                                                # sil_end_htk = int(round(start_sec * 10_000_000))
+                                                # if sil_end_htk > sil_start_htk:
+                                                #     phonemes.append([str(sil_start_htk), str(sil_end_htk), "pau"])
+                                                
+                                                # # change previous end time
+                                                # phonemes[-1][1] = str(int(round(start_sec * 10_000_000)))
+                                                
+                                                # Analyze the gap between the last phoneme and the current CTC spike
+                                                gap_start_samp = min(int(current_sec * 16_000), len(wav_array))
+                                                gap_end_samp = min(int(start_sec * 16_000), len(wav_array))
+                                                
+                                                gap_speech = is_speech[gap_start_samp:gap_end_samp]
+                                                silence_indices = np.where(~gap_speech)[0]
+                                                
+                                                # If we find at least 20ms of silence (320 samples at 16kHz) in this gap
+                                                if len(silence_indices) > 320 and not phonemes[-1][2] == "cl":
+                                                    sil_start_in_gap = silence_indices[0]
+                                                    sil_end_in_gap = silence_indices[-1]
+                                                    
+                                                    actual_sil_start_sec = current_sec + (sil_start_in_gap / 16_000)
+                                                    actual_sil_end_sec = current_sec + (sil_end_in_gap / 16_000)
+                                                    
+                                                    sil_start_htk = int(round(actual_sil_start_sec * 10_000_000))
+                                                    sil_end_htk = int(round(actual_sil_end_sec * 10_000_000))
+                                                    
+                                                    if phonemes[-1][2] == "pau":
+                                                        # Merge into previous pause
+                                                        phonemes[-1][1] = str(sil_end_htk)
+                                                    else:
+                                                        # Stop previous phoneme exactly where silence starts, then insert pau
+                                                        phonemes[-1][1] = str(sil_start_htk)
+                                                        phonemes.append([str(sil_start_htk), str(sil_end_htk), "pau"])
+                                                    
+                                                    # The current phoneme effectively starts right after the silence
+                                                    phoneme_start_sec = actual_sil_end_sec
+                                                else:
+                                                    # No significant silence detected, stretch previous phoneme
+                                                    phonemes[-1][1] = str(int(round(start_sec * 10_000_000)))
+                                                    phoneme_start_sec = start_sec
+                                            else:
+                                                phoneme_start_sec = start_sec
+                                                
+                                            phoneme_end_sec = max(end_sec, phoneme_start_sec)
+                                                    
+                                            # start_htk = int(round(start_sec * 10_000_000))
+                                            # end_htk = int(round(end_sec * 10_000_000))
+                                            
+                                            # phonemes.append([str(start_htk), str(end_htk), phoneme])
+                                            # current_sec = end_sec
+                                            
+                                            start_htk = int(round(phoneme_start_sec * 10_000_000))
+                                            end_htk = int(round(phoneme_end_sec * 10_000_000))
+                                            
+                                            phonemes.append([str(start_htk), str(end_htk), phoneme])
+                                            current_sec = phoneme_end_sec
+                                            
+                                        # add silence
+                                        wav_sec = wav_files[i].shape[0] / 16_000
+                                        sil_start_htk = int(round(current_sec * 10_000_000))
+                                        sil_end_htk = int(round(wav_sec * 10_000_000))
+                                        if len(phonemes) > 1 and sil_end_htk > sil_start_htk:
+                                            # # detect end of silence
+                                            # _, index = librosa.effects.trim(wav_files[i], top_db=30)
+                                            # detected_end_sec = index[1] / 16_000
+                                            # last_phoneme_end_sec = max(current_sec + 0.05, detected_end_sec)
+                                            # last_phoneme_end_htk = int(round(last_phoneme_end_sec * 10_000_000))
+                                            # last_phoneme_end_htk = min(last_phoneme_end_htk, sil_end_htk)
+                                            # phonemes[-1][1] = str(last_phoneme_end_htk)
+                                            # phonemes.append([str(last_phoneme_end_htk), str(sil_end_htk), "pau"])
+                                            
+                                            # Find the last moment of speech in the file
+                                            speech_indices = np.where(is_speech)[0]
+                                            if len(speech_indices) > 0:
+                                                detected_end_sec = speech_indices[-1] / 16_000
+                                            else:
+                                                detected_end_sec = current_sec
+                                                
+                                            last_phoneme_start_sec = int(phonemes[-1][0]) / 10_000_000
+                                            last_phoneme_end_sec = max(last_phoneme_start_sec + 0.05, detected_end_sec)
+                                            last_phoneme_end_sec = min(last_phoneme_end_sec, wav_sec)
+                                            
+                                            last_phoneme_end_htk = int(round(last_phoneme_end_sec * 10_000_000))
+                                            phonemes[-1][1] = str(last_phoneme_end_htk)
+                                            
+                                            if sil_end_htk > last_phoneme_end_htk:
+                                                if phonemes[-1][2] == "pau":
+                                                    phonemes[-1][1] = str(sil_end_htk)
+                                                else:
+                                                    phonemes.append([str(last_phoneme_end_htk), str(sil_end_htk), "pau"])
+                                            
+                                            
+                                        # save aligned phonemes
+                                        with open(os.path.splitext(filename)[0] + '.phonemes_aligned.txt', 'w') as f:
+                                            f.write('\n'.join('\t'.join(p) for p in phonemes))
+                                            
+                                        phonemeses[filename] = '\n'.join('\t'.join(p) for p in phonemes)
+                                            
+                                    # phoneme_aligned = get_ctc_forced_alignment(outputs["phoneme_logits"], phonemes, blank_id=transcription_g2p_tokenizers["phoneme_tokenizer"].pad_token_id)
+                                kanas = [transcription_phoneme_model.ctc_decode(kana_logits.to("cpu").tolist(), transcription_g2p_tokenizers["kana_tokenizer"], is_kana=True) for kana_logits in kana_logits_argmax]
+                                phonemes = [transcription_phoneme_model.ctc_decode(phoneme_logits.to("cpu").tolist(), transcription_g2p_tokenizers["phoneme_tokenizer"]) for phoneme_logits in phoneme_logits_argmax]
                                 kanas = ["…" if kana.strip() == "" else kana for kana in kanas]
                                 phonemes = ["…" if phoneme.strip() == "" else phoneme for phoneme in phonemes]
                                 transcribed_texts.extend([{"text": kana, "phoneme": phoneme} for kana, phoneme in zip(kanas, phonemes)])
@@ -278,8 +455,7 @@ def make_lab_files(args, root_path):
                                 del wav_files, wav_files_padded
                                 if device.type == "cuda":
                                     torch.cuda.empty_cache()
-                all_texts = {}
-                phonemeses = {}
+                
                 # save transcripted texts
                 for i in range(len(need_transcription_files)):
                     text_file = os.path.splitext(need_transcription_files[i])[0] + '.txt'
@@ -291,7 +467,8 @@ def make_lab_files(args, root_path):
                         if need_transcription_files[i] in already_phonemization_files:
                             continue
                         phoneme_file = os.path.splitext(need_transcription_files[i])[0] + '.phonemes.txt'
-                        phonemeses[need_transcription_files[i]] = transcribed_texts[i]["phoneme"]
+                        if not args.g2p_alignment_type.endswith('ctc'):
+                            phonemeses[need_transcription_files[i]] = transcribed_texts[i]["phoneme"]
                         with open(phoneme_file, 'w') as f:
                             f.write(transcribed_texts[i]["phoneme"])
                 # read existing text files

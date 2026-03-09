@@ -10,11 +10,11 @@ SET TRANSCRIBE_PHONEME_MODEL=TylorShine/wavlm-base-plus-hiragana-ctc-v2
 SET TRANSCRIBE_LANGUAGE=ja
 SET TRANSCRIBE_BATCH_SIZE=8
 
-@REM "openjtalk+domino" or "openjtalk+SOFA"
-SET ALIGNMENT_TYPE="openjtalk+domino"
+@REM "openjtalk+domino" or "openjtalk+SOFA" or "ctc"(when transcription_phoneme_model is wavlm-base-plus-hiragana-ctc)
+SET ALIGNMENT_TYPE="ctc"
 
-@REM SET ADDITIONAL_ARGS=
-SET ADDITIONAL_ARGS=--keep_punctuations
+SET ADDITIONAL_ARGS=
+@REM SET ADDITIONAL_ARGS=--keep_punctuations
 
 
 CD content

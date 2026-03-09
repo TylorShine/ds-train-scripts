@@ -22,10 +22,9 @@ CD content\DiffSinger
 SET ACOUSTIC_CKPT="../trained_models/diffsinger/model_ckpt_steps_160000.ckpt"
 SET VARIANCE_CKPT="../trained_models/diffsinger_variance/model_ckpt_steps_160000.ckpt"
 SET ONNX_OUTPUT_DIR=../output_models/diffsinger
-SET CHARA_NAME="your diffsinger voice bank"
 
 SET CONDAEXE=micromamba
 
-python ..\..\export_onnx.py --acoustic %ACOUSTIC_CKPT% --variance %VARIANCE_CKPT% --output %ONNX_OUTPUT_DIR% --conda %CONDAEXE% --make_ou_compatible --chara_name %CHARA_NAME%
+python ..\..\export_onnx.py --acoustic %ACOUSTIC_CKPT% --variance %VARIANCE_CKPT% --output %ONNX_OUTPUT_DIR% --conda %CONDAEXE% --make_ou_compatible
 
 pause

@@ -6,7 +6,7 @@ CALL setup.bat
 @REM data_type: lab_wav, csv_wav, ds
 SET DATA_TYPE=lab_wav
 
-SET TRANSCRIBE_PHONEME_MODEL=TylorShine/wavlm-base-plus-hiragana-ctc
+SET TRANSCRIBE_PHONEME_MODEL=TylorShine/wavlm-base-plus-hiragana-ctc-v2
 SET TRANSCRIBE_LANGUAGE=ja
 SET TRANSCRIBE_BATCH_SIZE=8
 
